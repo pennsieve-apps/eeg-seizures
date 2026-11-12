@@ -21,8 +21,8 @@ application:
     - event-detection
 runtime:
   # One recording at a time, read in 10-minute windows. Measured in Docker (amd64 emulated on an
-  # M-series Mac): the 41 Siena recordings (141 h) in 88 s on 2 vCPU, cgroup peak 0.84 GB
-  # (page cache included, RSS 355 MB); one 13.5 h recording in 13 s on 1 vCPU, peak 0.76 GB.
+  # M-series Mac): the 41 Siena recordings (141 h) in 93-95 s on 2 vCPU, cgroup peak 0.87-0.99 GB
+  # (page cache included, RSS 360 MB); one 13.5 h recording in 13 s on 1 vCPU, peak 0.76 GB.
   # A user-supplied model can be much slower: the timeout leaves room for that. See README "Runtime".
   cpu: 1024
   memory: 2048
@@ -115,6 +115,16 @@ parameters:
     defaultValue: 600
     min: 60
     max: 7200
+  - name: EXCLUDE_BAD_SEGMENTS
+    type: boolean
+    label: Leave out eeg-prep bad segments
+    description: >-
+      false (default): eeg-prep's automatic bad_segment intervals are analysed like the rest,
+      because high-amplitude ictal activity exceeds eeg-prep's amplitude criterion and its bad
+      segments can cover the very seizures to be found. true: leave them out (fewer false
+      detections from artifact, but seizures inside them are missed). Annotated artifact
+      intervals of the source are always left out.
+    defaultValue: false
   - name: SCORE
     type: boolean
     label: Score against annotations

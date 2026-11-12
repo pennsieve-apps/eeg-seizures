@@ -282,6 +282,14 @@ def find_recordings(input_dir: Path, skip: set[str] | None = None
     return out, seen, problems
 
 
+def excluded_intervals(rec: Recording, exclude_bad_segments: bool) -> list[tuple[float, float, str]]:
+    """Intervals left out of detection: annotated `artifact` rows always; eeg-prep's automatic
+    `bad_segment` rows only with EXCLUDE_BAD_SEGMENTS=true, because high-amplitude ictal activity
+    exceeds eeg-prep's amplitude criterion and its bad segments can cover the very seizures this
+    step must find."""
+    return [e for e in rec.excluded if e[2] == "artifact" or (exclude_bad_segments and e[2] == "bad_segment")]
+
+
 # --- channels and montage ------------------------------------------------------------------
 
 def electrode(name: str) -> str | None:

@@ -56,7 +56,7 @@ def test_planted_seizures_are_detected_and_distractors_are_not(fixture, output):
             assert a - 30 <= fa <= b and fb >= a, (rid, a, b, fa, fb)
     sub01 = by_rec["sub-01_ses-01_task-szMonitoring_run-01"]
     assert not any(fa < 563 and fb > 560 for fa, fb in sub01), "3 s artifact detected"
-    assert not any(fa < 830 and fb > 800 for fa, fb in sub01), "bad segment detected"
+    assert not any(fa < 830 and fb > 800 for fa, fb in sub01), "annotated artifact detected"
     assert all(d["detector"] == "linelength" for d in det)
 
 
@@ -96,7 +96,9 @@ def test_probability_one_row_per_second(output):
     assert n == {"sub-01_ses-01_task-szMonitoring_run-01": 900, "sub-02_ses-01_task-szMonitoring_run-01": 480,
                  "sub-chb99_task-eeg_run-01": 720}
     bad = [r for r in pr if r["recording_id"].startswith("sub-01") and 805 <= int(r["time_s"]) < 825]
-    assert all(r["probability"] == "" for r in bad)  # bad segment left out
+    assert all(r["probability"] == "" for r in bad)  # annotated artifact left out
+    sz = [r for r in pr if r["recording_id"].startswith("sub-01") and 690 <= int(r["time_s"]) < 720]
+    assert all(r["probability"] != "" for r in sz)  # eeg-prep bad_segment over the seizure kept by default
 
 
 def test_provenance_and_summary(output):
@@ -117,6 +119,15 @@ def test_provenance_and_summary(output):
     assert all((output / t["path"]).is_file() for t in summ["tables"])
     assert summ["recordings"]["sub-01_ses-01_task-szMonitoring_run-01"]["seizures_detected"] == 2
     assert summ["pooled"]["event"]["pooled"]["fp_per_day"] == 0
+
+
+def test_exclude_bad_segments_drops_the_covered_seizure(fixture, tmp_path):
+    r = run(fixture / "eeg" / "sub-01", tmp_path, EXCLUDE_BAD_SEGMENTS="true")
+    assert r.returncode == 0, r.stderr
+    det = rows(tmp_path / "eeg-seizures" / "seizures.csv")
+    assert not any(float(d["onset_s"]) < 725 and float(d["onset_s"]) + float(d["duration_s"]) > 685 for d in det)
+    prov = json.loads((tmp_path / "eeg-seizures" / "provenance.json").read_text())
+    assert prov["parameters"]["EXCLUDE_BAD_SEGMENTS"] == "true"
 
 
 def test_bad_parameter_exits_2(fixture, tmp_path):

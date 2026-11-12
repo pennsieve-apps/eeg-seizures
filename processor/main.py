@@ -131,7 +131,7 @@ def _bool(name: str, value: str) -> bool:
 DEFAULTS = {
     "DETECTOR": "linelength", "THRESHOLD": "4.5", "MODEL_THRESHOLD": "auto", "TOP_K": "8",
     "MIN_DURATION_S": "20", "MERGE_GAP_S": "90", "MAX_DURATION_S": "300", "BASELINE_S": "300",
-    "HIGHPASS_HZ": "1", "LOWPASS_HZ": "20", "WINDOW_S": "600", "SCORE": "true", "THREADS": "0", "LABEL": "",
+    "HIGHPASS_HZ": "1", "LOWPASS_HZ": "20", "WINDOW_S": "600", "EXCLUDE_BAD_SEGMENTS": "false", "SCORE": "true", "THREADS": "0", "LABEL": "",
 }
 
 
@@ -169,6 +169,7 @@ def env_params() -> dict:
         raise ValueError("LOWPASS_HZ must be above HIGHPASS_HZ")
     p["window"] = num("WINDOW_S", 60, 7200, integer=True)
     p["score"] = _bool("SCORE", raw["SCORE"])
+    p["exclude_bad"] = _bool("EXCLUDE_BAD_SEGMENTS", raw["EXCLUDE_BAD_SEGMENTS"])
     if THREADS_REQUESTED < 0:
         raise ValueError("THREADS must be a whole number >= 0 (0 = every vCPU)")
     p["threads"], p["threads_why"] = THREADS_USED, THREADS_WHY
@@ -182,9 +183,9 @@ class Skipped(Exception):
     """A designed reason not to analyse a recording (not a failure)."""
 
 
-def _excluded_mask(rec: E.Recording, n_sec: int) -> tuple[np.ndarray, float]:
+def _excluded_mask(rec: E.Recording, n_sec: int, exclude_bad_segments: bool) -> tuple[np.ndarray, float]:
     valid = np.ones(n_sec, dtype=bool)
-    for a, b, _ in rec.excluded:
+    for a, b, _ in E.excluded_intervals(rec, exclude_bad_segments):
         valid[max(0, int(math.floor(a))): max(0, min(n_sec, int(math.ceil(b))))] = False
     return valid, float((~valid).sum())
 
@@ -239,7 +240,8 @@ def process_recording(rec: E.Recording, p: dict, model: M.Model | None) -> dict:
     picks = [index[s[0]] for s in mont.sources]
     nch = len(picks)
     start_dt = E.start_datetime(rec, raw)
-    valid, n_excluded = _excluded_mask(rec, n_sec)
+    valid, n_excluded = _excluded_mask(rec, n_sec, p["exclude_bad"])
+    n_bad_kept = sum(1 for e in rec.excluded if e[2] == "bad_segment") if not p["exclude_bad"] else 0
 
     if model is None:
         sos = D.bandpass_sos(fs, p["highpass"], p["lowpass"])
@@ -347,7 +349,9 @@ def process_recording(rec: E.Recording, p: dict, model: M.Model | None) -> dict:
         "status": "ok", "montage": mont.kind, "montage_note": mont.note, "sfreq": fs,
         "resampled_to": D.FS, "duration_s": round(duration, 3), "n_channels": nch, "channels": mont.names,
         "channels_missing": mont.missing, "channels_ignored": mont.ignored,
-        "excluded_s": n_excluded, "excluded": [{"start_s": a, "end_s": b, "reason": k} for a, b, k in rec.excluded],
+        "excluded_s": n_excluded,
+        "excluded": [{"start_s": a, "end_s": b, "reason": k} for a, b, k in E.excluded_intervals(rec, p["exclude_bad"])],
+        "bad_segments_not_excluded": n_bad_kept,
         "start_time": start_dt.strftime("%Y-%m-%dT%H:%M:%S") if start_dt else None,
         "annotations": {"known": rec.labels_known, "sources": rec.label_sources, "n_seizures": len(rec.seizures)},
         "n_detections": len(out_events), "detector": detector, "threshold": on,

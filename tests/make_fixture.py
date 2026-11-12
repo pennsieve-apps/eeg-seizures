@@ -8,8 +8,10 @@ A small synthetic scalp EEG input for the tests, `make run` and the app.yml revi
         a focal left-temporal rhythmic discharge (360-405 s, 6 Hz slowing to 3.5 Hz, building
         up to ~150 µV on F7/T7/P7) and a generalised, frontally dominant 3 Hz spike-wave discharge (690-720 s).
         Distractors that must NOT be detected: a 3 s high-amplitude artifact at 560 s (shorter
-        than MIN_DURATION_S) and a 30 s burst of large noise at 800-830 s marked as a
-        `bad_segment` in events.tsv. Fz is marked bad in channels.tsv.
+        than MIN_DURATION_S) and a 30 s burst of large noise at 800-830 s annotated as an
+        `artifact` in events.tsv. The spike-wave seizure is covered by an eeg-prep `bad_segment`
+        (685-725 s), as eeg-prep's amplitude criterion marks large ictal activity: it must still be
+        detected by default (EXCLUDE_BAD_SEGMENTS=false). Fz is marked bad in channels.tsv.
     sub-02/ses-01/eeg/sub-02_ses-01_task-szMonitoring_run-01_desc-preproc_*  512 Hz (resampled in the
         app), 8 min, no seizure (a recording with no detection must give a `bckg` SzCORE row).
     loose/chb99/chb99_01.edf + chb99-summary.txt
@@ -172,10 +174,12 @@ def make(out: Path) -> Path:
     x[good] -= x[good].mean(axis=0)  # common average of the good channels, as eeg-prep writes it
     ev = [{"onset": "360.0", "duration": "45.0", "trial_type": "seizure", "source": "annotation", "channels": ""},
           {"onset": "690.0", "duration": "30.0", "trial_type": "seizure", "source": "annotation", "channels": ""},
-          {"onset": "800.0", "duration": "30.0", "trial_type": "bad_segment", "source": "eeg-prep", "channels": ""}]
+          {"onset": "800.0", "duration": "30.0", "trial_type": "artifact", "source": "annotation", "channels": ""},
+          {"onset": "685.0", "duration": "40.0", "trial_type": "bad_segment", "source": "eeg-prep", "channels": ""}]
     recs.append(derivative_recording(root, "01", fs, x, "2024-03-05T22:14:03", ev, bad=("Fz",)))
     truth[recs[-1]["recording_id"]] = {"seizures": [[360.0, 405.0], [690.0, 720.0]], "artifact": [560.0, 563.0],
-                                       "bad_segment": [800.0, 830.0]}
+                                       "artifact_annotated": [800.0, 830.0],
+                                       "bad_segment": [685.0, 725.0]}
 
     # sub-02: 512 Hz, no seizure
     fs, dur = 512.0, 480.0

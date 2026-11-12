@@ -50,7 +50,9 @@ def recording_figure(path: Path, rid: str, r: dict, p: dict) -> None:
         ax.axvspan(on / unit, (on + d) / unit, color=ANNOTATED, alpha=0.12, lw=0)
     for e in events:
         ax_lane.add_patch(plt.Rectangle((e["onset"] / unit, 0.1), e["duration"] / unit, 0.35, color=DETECTED, lw=0))
-    for a, b, _ in rec.excluded:
+    from processor.eeg import excluded_intervals
+
+    for a, b, _ in excluded_intervals(rec, p["exclude_bad"]):
         ax.axvspan(a / unit, b / unit, facecolor="none", edgecolor=MISSED, hatch="///", lw=0)
     min_w = r["duration"] / unit / 400  # keep short events visible
     for on, dur in rec.seizures:
@@ -180,6 +182,6 @@ def make_all(out: Path, results: dict, pooled: dict, p: dict) -> list[dict]:
         if i < MAX_RECORDING_FIGURES:
             figs.append({"path": f"figures/{name}", "caption": (
                 f"{rid}: the per-second {det} (grey; dashed orange line = threshold) with annotated seizures "
-                "(blue band and top lane) and detections (orange, bottom lane); hatched grey = bad segments left out. Look for whether the score "
+                "(blue band and top lane) and detections (orange, bottom lane); hatched grey = intervals left out (annotated artifacts; eeg-prep bad segments only with EXCLUDE_BAD_SEGMENTS=true). Look for whether the score "
                 "rises at the annotated onset and what else crosses the threshold (artifacts, arousals).")})
     return figs
