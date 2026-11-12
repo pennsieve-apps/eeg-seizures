@@ -231,6 +231,11 @@ reference). chb01's seizures are large and well known to be easy; Siena (adults 
 33 of its 47 seizures are focal with impaired awareness) is the harder and more representative
 test.
 
+On **eeg-prep's output** (its BIDS-EEG derivative of Siena sub-00, the only subject it had
+finished when this was measured: 5 recordings, 5 seizures; ICA artifact removal, bad channels
+and bad segments applied), the default found 4 of 5 seizures with no false detection (5 of 5 on
+the source data); the missed one (run-01) peaks just below the threshold in both.
+
 For context, the SzCORE benchmark's published Siena event scores
 (`results/*/siena.json` in [esl-epfl/szcore](https://github.com/esl-epfl/szcore), read
 2026-11-12) put the EPFL reimplementation of Gotman's 1982 classical detector at F1 0.07 with 286
