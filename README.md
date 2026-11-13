@@ -63,7 +63,7 @@ be plugged in through the optional `model` port without rebuilding the app.
 | `BASELINE_S` | `300` | Trailing window whose median and MAD normalise each channel. |
 | `HIGHPASS_HZ`, `LOWPASS_HZ` | `1`, `20` | Zero-phase 4th-order Butterworth band-pass before line length (`LOWPASS_HZ=0`: high-pass only). 20 Hz keeps rhythmic ictal activity and suppresses muscle artifact. Not applied to a model's input (the model says what it wants, below). |
 | `WINDOW_S` | `600` | Windows the recording is read in (plus 5 s of context each side): memory depends on this, not on the recording's length. |
-| `EXCLUDE_BAD_SEGMENTS` | `false` | Whether eeg-prep's automatic `bad_segment` intervals are left out of detection. **Off by default**: eeg-prep marks a segment bad when its amplitude exceeds `AMPLITUDE_UV` (500 µV), and high-amplitude ictal activity does exactly that, so its bad segments can cover the seizures this step must find (on chb01 they cover all 7; see *Validation*). Set `true` to trade sensitivity for far fewer false detections from artifact. Annotated `artifact` intervals of the source recording are always left out. |
+| `EXCLUDE_BAD_SEGMENTS` | `false` | Whether eeg-prep's automatic `bad_segment` intervals are left out of detection. **Only safe when the bad segments do not overlap seizures.** eeg-prep's amplitude and muscle criteria also fire on ictal activity, and on unannotated recordings excluding them chops seizures into pieces too short to keep (blind eeg-prep output: chb01 5 → 0 of 7 seizures found, Siena 26 → 21 of 47; see *Validation*). Where the bad segments are known to spare the seizures it removes most false detections (about 15 → 1 per day on Siena). Annotated `artifact` intervals of the source recording are always left out. |
 | `SCORE` | `true` | Score against annotated seizures when a recording has an annotation source. Recordings without one are not scored (no annotation is not the same as "no seizure"). |
 | `THREADS` | `0` | Threads for ONNX Runtime and BLAS; `0` = one per vCPU of the container's cgroup quota (not the host's count). Logged and kept in `provenance.json`. |
 | `LABEL` | (empty) | Write to `eeg-seizures/<LABEL>/` (e.g. one run per detector). |
@@ -225,8 +225,9 @@ low-pass (20/25/30 Hz), `TOP_K`, `MIN_DURATION_S` (10/15/20 s; 30 s was not allo
 while tuning; nothing was re-tuned on eeg-prep's output.
 
 Event sensitivity (seizures found), precision, F1 and false detections per day. eeg-prep output
-is its final version (bad time 4.6 % of Siena and 2.7 % of chb01; no annotated seizure overlaps
-a bad segment):
+is its final version, which protects annotated seizures from bad segments (bad time 4.6 % of
+Siena and 2.7 % of chb01; no annotated seizure overlaps a bad segment; see below for the
+unprotected, "blind" case that real, unannotated recordings are in):
 
 | Set | Seizures | Hours | Source data (default) | eeg-prep output, default (`EXCLUDE_BAD_SEGMENTS=false`) | eeg-prep output, `EXCLUDE_BAD_SEGMENTS=true` |
 |---|---|---|---|---|---|
@@ -245,14 +246,41 @@ timescoring against the dataset's own HED-SCORE files: identical (source 23 TP /
 with focal epilepsy; 33 of its 47 seizures are focal with impaired awareness) is the harder and
 more representative test.
 
-**eeg-prep's bad segments.** Most false detections of the line-length detector fall in what
-eeg-prep marks as bad (high-amplitude artifact): leaving those segments out removes almost all of
-them (Siena 14.8 → 0.9 per day) without losing a seizure on this data. It is still **off by
-default**, because eeg-prep marks a segment bad by amplitude (`AMPLITUDE_UV`), and high-amplitude
-ictal activity can cross that: with eeg-prep's earlier, stricter bad-segment rules, every chb01
-seizure was inside a bad segment and `EXCLUDE_BAD_SEGMENTS=true` found 0 of 7. Turn it on when
-the bad segments are known not to cover seizures (check eeg-prep's QC), or when a short list
-matters more than completeness.
+**eeg-prep's bad segments, and why they are kept by default.** On the protected output, leaving
+eeg-prep's bad segments out removes almost all false detections (Siena 14.8 → 0.9 per day)
+without losing a seizure, but only because eeg-prep kept them clear of the *annotated* seizures.
+Real recordings are not annotated, so the fair test is eeg-prep run **blind**
+(`PROTECT_ANNOTATED_SEIZURES=false`: bad segments computed ignoring the annotations; they then
+touch 38 of 47 Siena seizures, mean 12.5 % of each seizure, and all 7 chb01 seizures, mean 32 %,
+almost all through the muscle criterion). Outputs in
+`data/work/<demo>/eeg-seizures-blind/{keep,exclude}/`:
+
+| Set | Protected, keep (default) | Protected, exclude | **Blind, keep (default)** | **Blind, exclude** |
+|---|---|---|---|---|
+| Siena tuning half (21 seizures) | 0.67 (14) / 0.21 / 0.32 / 20.0 | 0.67 (14) / 0.78 / 0.72 / 1.5 | 0.62 (13) / 0.20 / 0.30 / 20.4 | 0.67 (14) / 0.78 / 0.72 / 1.5 |
+| **Siena held-out half (26 seizures)** | 0.50 (13) / 0.27 / 0.35 / 10.7 | 0.50 (13) / 0.93 / 0.65 / 0.3 | **0.50 (13) / 0.28 / 0.36 / 10.4** | **0.27 (7) / 0.88 / 0.41 / 0.3** |
+| Siena all 14, pooled (47 seizures) | 0.57 (27) / 0.24 / 0.34 / 14.8 | 0.57 (27) / 0.84 / 0.68 / 0.9 | 0.55 (26) / 0.23 / 0.33 / 14.8 | 0.45 (21) / 0.81 / 0.58 / 0.9 |
+| Siena all 14, subject mean | 0.63 / 0.42 / 0.40 / 16.8 | 0.64 / 0.92 / 0.65 / 0.4 | 0.60 / 0.43 / 0.38 / 16.9 | 0.46 / 0.85 / 0.49 / 0.4 |
+| **chb01 (7 seizures)** | 0.71 (5) / 0.71 / 0.71 / 1.2 | 0.71 (5) / 1.00 / 0.83 / 0.0 | **0.71 (5) / 0.71 / 0.71 / 1.2** | **0.00 (0) / – / 0.00 / 0.0** |
+
+On blind bad segments, exclusion loses seizures: 12 that keeping finds (all 5 found on chb01;
+7 on Siena: sub-07 run-00, sub-10 runs 02, 03, 05, sub-14 run-03, sub-16 run-01, sub-17 run-01),
+while gaining 2 (sub-00 run-01, sub-09 run-00, probably through a cleaner baseline). The cause is
+**fragmentation**, not full coverage: no seizure is entirely inside a bad segment, but an excluded
+second ends a candidate event, and pieces shorter than `MIN_DURATION_S` (20 s) are dropped
+*before* nearby pieces are merged, so a seizure cut by several short bad segments (19–61 % of
+chb01 seizures, in 4–13 segments, longest clean stretch 6–17 s) disappears. eeg-prep's **muscle**
+criterion causes most of these cuts: it fires on the fast (beta/gamma) activity of seizures as
+well as on muscle artifact (every lost chb01 seizure, and sub-10 and sub-17 on Siena, are in
+recordings whose only bad segments are muscle). So `EXCLUDE_BAD_SEGMENTS=true` is safe only when
+the bad segments are known not to overlap seizures (as on eeg-prep's protected demo output);
+on unannotated recordings keep the default.
+
+Possible improvements (not implemented): (a) carry the score across short excluded gaps (e.g. ≤ 10
+s) instead of ending the event, and only refuse to *start* an event inside a bad segment; (b)
+exclude only eeg-prep's amplitude, extreme-amplitude and flat segments, not muscle (needs a
+per-segment criterion column in eeg-prep's `_events.tsv`; today the criterion is only recorded
+per recording).
 
 For context, the SzCORE benchmark's published Siena event scores
 (`results/*/siena.json` in [esl-epfl/szcore](https://github.com/esl-epfl/szcore), read
@@ -266,7 +294,7 @@ state-of-the-art detector; plug in a model for more.
 
 - **Review candidates only.** On held-out adult focal epilepsy (Siena) the default finds about
   4–5 in 10 annotated seizures (source data; half on eeg-prep's output) at about 11–12 false
-  detections per day (about 0.3 per day on eeg-prep's output with `EXCLUDE_BAD_SEGMENTS=true`);
+  detections per day;
   performance differs a lot between patients (0–100 % per subject). Do not use it to count seizures or to decide treatment.
 - Line length rises with any large, fast, sustained signal: chewing, movement, electrode
   artifact and high-amplitude sleep activity cause false detections; low-amplitude or

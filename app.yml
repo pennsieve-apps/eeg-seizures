@@ -119,11 +119,11 @@ parameters:
     type: boolean
     label: Leave out eeg-prep bad segments
     description: >-
-      false (default): eeg-prep's automatic bad_segment intervals are analysed like the rest,
-      because high-amplitude ictal activity exceeds eeg-prep's amplitude criterion and its bad
-      segments can cover the very seizures to be found. true: leave them out (fewer false
-      detections from artifact, but seizures inside them are missed). Annotated artifact
-      intervals of the source are always left out.
+      false (default): eeg-prep's automatic bad_segment intervals are analysed like the rest.
+      true: leave them out. Only safe when the bad segments do not overlap seizures: eeg-prep's
+      amplitude and muscle criteria also fire on ictal activity, and on unannotated recordings
+      excluding them chops seizures into pieces shorter than MIN_DURATION_S (README
+      "Validation"). Annotated artifact intervals of the source are always left out.
     defaultValue: false
   - name: SCORE
     type: boolean
