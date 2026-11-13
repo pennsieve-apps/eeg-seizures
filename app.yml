@@ -1,0 +1,199 @@
+# yaml-language-server: $schema=https://schemas.pennsieve.io/app-manifest/v1.json
+schemaVersion: "1.0"
+application:
+  name: Scalp EEG Seizures
+  description: >-
+    Seizure detection on clinical scalp EEG in the SzCORE format (Dan et al. 2024): a
+    line-length detector (Esteller et al. 2001) on the 19 10-20 electrodes in average reference
+    at 256 Hz (bipolar-only recordings stay bipolar), or a user-supplied ONNX model. Writes
+    the candidate seizures as SzCORE event files and, when seizures are annotated, scores them
+    with timescoring (event-based sensitivity, precision, F1 and false detections per day).
+    Detections are candidates for expert review, not a diagnosis.
+  type: processor
+  tags:
+    - eeg
+    - scalp-eeg
+    - electrophysiology
+    - epilepsy
+    - neurology
+    - neuroscience
+    - seizure-detection
+    - event-detection
+runtime:
+  # One recording at a time, read in 10-minute windows. Measured in Docker (amd64 emulated on an
+  # M-series Mac): eeg-prep's output of the 41 Siena recordings (141 h) in 68 s on 2 vCPU, cgroup
+  # peak 0.98 GB (page cache included, RSS 358 MB); one 13.5 h recording in 15 s on 1 vCPU
+  # (11.5 s in the app), peak 0.76 GB. Same figures as the README "Runtime" table.
+  # A user-supplied model can be much slower: the timeout leaves room for that. See README "Runtime".
+  cpu: 1024
+  memory: 2048
+  computeTypes:
+    - standard
+  timeoutSeconds: 7200
+parameters:
+  - name: DETECTOR
+    type: string
+    label: Detector
+    description: >-
+      linelength: per-channel line length normalised to a trailing 5-minute baseline (the
+      default; no training, no model). model: the ONNX model linked to the `model` input port
+      (see the README for the interface).
+    defaultValue: linelength
+    validValues: [linelength, model]
+  - name: THRESHOLD
+    type: number
+    label: Line-length threshold (z)
+    description: >-
+      An event starts when the combined line-length score (robust z-score against the
+      previous 5 minutes) reaches this value and ends when it falls below 0.75 x this value.
+      Lower = more seizures found and more false detections. 4.5 was tuned for the best SzCORE
+      event F1 on 7 of the 14 Siena subjects (README "Validation").
+    defaultValue: 4.5
+    min: 0.5
+    max: 50
+  - name: MODEL_THRESHOLD
+    type: string
+    label: Model threshold
+    description: auto (the threshold in the model's model.json, else 0.5) or a probability between 0.01 and 0.99.
+    defaultValue: auto
+  - name: TOP_K
+    type: integer
+    label: Channels combined
+    description: >-
+      The per-second score is the mean z-score of the TOP_K channels with the largest rise, so
+      a focal seizure on a few channels still counts.
+    defaultValue: 8
+    min: 1
+    max: 23
+  - name: MIN_DURATION_S
+    type: number
+    label: Minimum event duration (s)
+    description: Shorter candidate events are dropped (before merging).
+    defaultValue: 20
+    min: 0
+    max: 600
+  - name: MERGE_GAP_S
+    type: number
+    label: Merge gap (s)
+    description: Events closer than this are merged into one (SzCORE merges events closer than 90 s when scoring).
+    defaultValue: 90
+    min: 0
+    max: 3600
+  - name: MAX_DURATION_S
+    type: number
+    label: Maximum event duration (s)
+    description: Longer events are split into pieces of this length, as SzCORE's scoring does (0 = never split).
+    defaultValue: 300
+    min: 0
+    max: 86400
+  - name: BASELINE_S
+    type: integer
+    label: Baseline (s)
+    description: Length of the trailing window whose median and MAD normalise each channel's line length.
+    defaultValue: 300
+    min: 60
+    max: 3600
+  - name: HIGHPASS_HZ
+    type: number
+    label: High-pass (Hz)
+    description: Lower edge of the zero-phase band-pass applied before line length (line-length detector only).
+    defaultValue: 1
+    min: 0.1
+    max: 10
+  - name: LOWPASS_HZ
+    type: number
+    label: Low-pass (Hz)
+    description: >-
+      Upper edge of the band-pass (line-length detector only; 5-120, or 0 for none). 20 Hz keeps
+      the rhythmic ictal activity and suppresses muscle artifact, which line length is sensitive to.
+    defaultValue: 20
+    min: 0
+    max: 120
+  - name: WINDOW_S
+    type: integer
+    label: Read window (s)
+    description: Length of the windows the recording is read in; memory depends on this, not on the recording length.
+    defaultValue: 600
+    min: 60
+    max: 7200
+  - name: EXCLUDE_BAD_SEGMENTS
+    type: boolean
+    label: Leave out eeg-prep bad segments
+    description: >-
+      false (default): eeg-prep's automatic bad_segment intervals are analysed like the rest.
+      true: leave them out. Only safe when the bad segments do not overlap seizures: eeg-prep's
+      amplitude and muscle criteria also fire on ictal activity, and on unannotated recordings
+      excluding them chops seizures into pieces shorter than MIN_DURATION_S (README
+      "Validation"). Annotated artifact intervals of the source are always left out.
+    defaultValue: false
+  - name: SCORE
+    type: boolean
+    label: Score against annotations
+    description: >-
+      Score the detections with timescoring against the annotated seizures (events.tsv
+      seizure rows, SzCORE HED-SCORE files, CHB-MIT summaries, labels.csv) when a recording has
+      an annotation source. Recordings without one are not scored.
+    defaultValue: true
+  - name: THREADS
+    type: integer
+    label: Threads
+    description: >-
+      Threads for the model and numerical libraries; 0 = one per vCPU the container is given
+      (its cgroup CPU quota, not the host's CPU count).
+    defaultValue: 0
+    min: 0
+  - name: LABEL
+    type: string
+    label: Output subfolder
+    description: When set, outputs are written to OUTPUT_DIR/eeg-seizures/<LABEL>/ (for a workflow that runs this step twice).
+    defaultValue: ""
+inputs:
+  - name: eeg
+    description: >-
+      The BIDS-EEG derivative of eeg-prep (recordings.csv, *_desc-preproc_eeg.edf with
+      channels.tsv and events.tsv), or any BIDS-EEG dataset (e.g. SzCORE's BIDS Siena / CHB-MIT
+      with HED-SCORE events.tsv), or loose EDF/BDF/BrainVision/FIF/EEGLAB files (with CHB-MIT
+      *-summary.txt or a labels.csv for seizure times). Folders and symlinks are followed.
+    mediaTypes:
+      - application/edf
+      - text/csv
+      - text/tab-separated-values
+      - text/plain
+      - application/json
+    placement: subfolder
+    required: true
+  - name: model
+    description: >-
+      Optional: a folder with model.json and an ONNX model (per-second seizure probabilities
+      from 19 x 256*W float32 windows; README "Bring your own model"). Used with DETECTOR=model.
+      No model is bundled.
+    mediaTypes:
+      - application/json
+      - application/octet-stream
+    placement: subfolder
+    required: false
+outputs:
+  - name: seizures
+    description: >-
+      eeg-seizures/: seizures.csv (recording_id, onset_s, duration_s, confidence, channels,
+      detector), szcore/<recording_id>.tsv (SzCORE event format), probability.csv
+      (recording_id, time_s, probability), scores.csv (recording_id, scope, metric, value),
+      figures/*.png, summary.json, provenance.json.
+    mediaTypes:
+      - text/csv
+      - text/tab-separated-values
+      - image/png
+      - application/json
+
+# How a release is tested before it is made public: the inputs a review run uses.
+# See app-deploy-service docs/app-manifest-review.md.
+review:
+  version: 1
+  # The generator also writes truth.json (the planted seizures, for the tests) next to eeg/;
+  # taking only eeg/ as the port's contents keeps it out of the app's INPUT_DIR. `model` is
+  # optional and left empty, so the sample runs the line-length detector.
+  inputs:
+    eeg:
+      generate:
+        command: python -m tests.make_fixture "$REVIEW_INPUT_DIR"
+        root: eeg
