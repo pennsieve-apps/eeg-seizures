@@ -21,8 +21,9 @@ application:
     - event-detection
 runtime:
   # One recording at a time, read in 10-minute windows. Measured in Docker (amd64 emulated on an
-  # M-series Mac): the 41 Siena recordings (141 h) in 93-95 s on 2 vCPU, cgroup peak 0.87-0.99 GB
-  # (page cache included, RSS 360 MB); one 13.5 h recording in 13 s on 1 vCPU, peak 0.76 GB.
+  # M-series Mac): eeg-prep's output of the 41 Siena recordings (141 h) in 68 s on 2 vCPU, cgroup
+  # peak 0.98 GB (page cache included, RSS 358 MB); one 13.5 h recording in 15 s on 1 vCPU
+  # (11.5 s in the app), peak 0.76 GB. Same figures as the README "Runtime" table.
   # A user-supplied model can be much slower: the timeout leaves room for that. See README "Runtime".
   cpu: 1024
   memory: 2048

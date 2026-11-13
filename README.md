@@ -192,10 +192,11 @@ arrays (≈ 20 MB for 24 h). Measured in Docker, **linux/amd64 emulated on an M-
 | Run | Data | `--cpus` / `--memory` | Wall time | Peak memory (cgroup `memory.peak`, incl. page cache) | Peak RSS |
 |---|---|---|---|---|---|
 | Siena, all 41 recordings, source data | 141.0 h, 19 ch, 256 Hz, 4.7 GB EDF | 2 / 3g | 93 s in the app | 0.87 GB | 360 MB |
-| Siena, all 41 recordings, eeg-prep output (final) | 141.0 h | 2 / 2g | 86 s in the app | 0.80 GB | 360 MB |
+| Siena, all 41 recordings, eeg-prep output (final) | 141.0 h | 2 / 2g | 68 s in the app | 0.98 GB | 358 MB |
 | CHB-MIT chb01, 42 files, source data | 40.6 h, 23 bipolar ch, 256 Hz | 2 / 3g | 25 s in the app | 0.62 GB | 349 MB |
-| CHB-MIT chb01, 42 files, eeg-prep output (final) | 40.6 h, 21 pairs | 2 / 2g | 29 s in the app | 0.55 GB | 350 MB |
-| Siena sub-01 run-00, one long recording | 13.5 h | 1 / 3g | 15 s (11.5 s for the recording: read 1.2 s, compute 6.7 s) | 0.76 GB | 330 MB |
+| CHB-MIT chb01, 42 files, eeg-prep output (final) | 40.6 h, 21 pairs | 2 / 2g | 23 s in the app | 0.60 GB | 351 MB |
+| ds003555, 3 recordings, eeg-prep output (never annotated: not scored) | 9 h, 1024 Hz → 256 Hz | 2 / 2g | 23 s in the app | 0.83 GB | 650 MB |
+| Siena sub-01 run-00, one long recording | 13.5 h | 1 / 3g | 15 s wall (11.5 s in the app: read 1.2 s, compute 6.7 s) | 0.76 GB | 330 MB |
 | Synthetic fixture, Lambda-style (`--read-only --user 65534:65534 --tmpfs /tmp`) | 3 recordings, 35 min | 2 / 3g | 6 s | — | 394 MB |
 
 So about a second per 1.5 hours of EEG under emulation. A user-supplied model is slower by
