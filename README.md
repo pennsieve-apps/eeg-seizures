@@ -46,7 +46,7 @@ be plugged in through the optional `model` port without rebuilding the app.
 | Port | Direction | Placement | What |
 |---|---|---|---|
 | `eeg` | input | subfolder | The BIDS-EEG derivative of eeg-prep (`recordings.csv`, `*_desc-preproc_eeg.edf` with `_channels.tsv` and `_events.tsv`), any BIDS-EEG dataset (e.g. SzCORE's BIDS Siena / CHB-MIT with HED-SCORE `_events.tsv`), or loose EDF/BDF/BrainVision/FIF/EEGLAB files. Seizure times come from `_events.tsv` (`trial_type` `seizure`, or HED-SCORE `eventType` `sz…`), CHB-MIT `*-summary.txt` next to the EDFs, or a `labels.csv` (`subject, recording_id, onset_s, duration_s, trial_type`). Found anywhere, folders and symlinks followed. |
-| `model` | input, optional | subfolder | A folder with `model.json` and an ONNX model (*Bring your own model*). Used only with `DETECTOR=model`. No model is bundled. |
+| `model` | input, optional | subfolder | A folder with `model.json` and an ONNX model (*Bring your own model*). Used only with `DETECTOR=model`. Only `INPUT_DIR/model/` (or a `model.json` at the input root) is looked at. No model is bundled. |
 | `seizures` | output | `OUTPUT_DIR/eeg-seizures/` (or `…/eeg-seizures/<LABEL>/`) | The tables, `szcore/`, `figures/`, `summary.json`, `provenance.json` |
 
 ## Parameters
@@ -64,7 +64,7 @@ be plugged in through the optional `model` port without rebuilding the app.
 | `HIGHPASS_HZ`, `LOWPASS_HZ` | `1`, `20` | Zero-phase 4th-order Butterworth band-pass before line length (`LOWPASS_HZ=0`: high-pass only). 20 Hz keeps rhythmic ictal activity and suppresses muscle artifact. Not applied to a model's input (the model says what it wants, below). |
 | `WINDOW_S` | `600` | Windows the recording is read in (plus 5 s of context each side): memory depends on this, not on the recording's length. |
 | `EXCLUDE_BAD_SEGMENTS` | `false` | Whether eeg-prep's automatic `bad_segment` intervals are left out of detection. **Only safe when the bad segments do not overlap seizures.** eeg-prep's amplitude and muscle criteria also fire on ictal activity, and on unannotated recordings excluding them chops seizures into pieces too short to keep (blind eeg-prep output: chb01 5 → 0 of 7 seizures found, Siena 26 → 21 of 47; see *Validation*). Where the bad segments are known to spare the seizures it removes most false detections (about 15 → 1 per day on Siena). Annotated `artifact` intervals of the source recording are always left out. |
-| `SCORE` | `true` | Score against annotated seizures when a recording has an annotation source. Recordings without one are not scored (no annotation is not the same as "no seizure"). |
+| `SCORE` | `true` | Score against annotated seizures when a recording has an annotation source: eeg-prep's `recordings.csv` `labels_source` (empty = never annotated), else seizure rows or SzCORE HED-SCORE rows in `_events.tsv`, a CHB-MIT summary or `labels.csv`. Recordings without one are not scored (no annotation is not the same as "no seizure"). |
 | `THREADS` | `0` | Threads for ONNX Runtime and BLAS; `0` = one per vCPU of the container's cgroup quota (not the host's count). Logged and kept in `provenance.json`. |
 | `LABEL` | (empty) | Write to `eeg-seizures/<LABEL>/` (e.g. one run per detector). |
 
@@ -85,7 +85,7 @@ largest first; empty for a model), `detector` (`linelength` or `model:<name>`).
 **`szcore/<recording_id>.tsv`**: the same events in SzCORE's HED-SCORE format: `onset, duration,
 eventType (sz), confidence, channels, dateTime, recordingDuration`, two decimals, `dateTime` the
 recording's wall-clock start (`recordings.csv` `start_time`, else the SzCORE `dateTime` of the
-source events, else the EDF header; `n/a` when unknown); a recording without detections gets one
+source events, else the EDF header; written as wall clock, a UTC offset in the input is ignored; `n/a` when unknown); a recording without detections gets one
 `bckg` row spanning it, as SzCORE writes. These files load with `epilepsy2bids`'
 `Annotations.loadTsv`, so they can go straight into szcore-evaluation.
 
@@ -221,7 +221,8 @@ defaults, against the same annotations. The defaults were **tuned on 7 of the 14
 subjects of the source data** (sub-00, 03, 06, 09, 11, 13, 16: 21 seizures, 62.3 h), choosing the
 low-pass (20/25/30 Hz), `TOP_K`, `MIN_DURATION_S` (10/15/20 s; 30 s was not allowed so that
 20–30 s seizures stay detectable) and `THRESHOLD` with the best pooled event F1
-(`scripts/sweep_threshold.py`). The other 7 Siena subjects and CHB-MIT chb01 were not looked at
+(`scripts/sweep_threshold.py`; its outputs are in `validation/sweep_siena-tuning_*.csv`, the
+chosen row is `lp20_fine` baseline 300, top_k 8, min_duration 20, threshold 4.5). The other 7 Siena subjects and CHB-MIT chb01 were not looked at
 while tuning; nothing was re-tuned on eeg-prep's output.
 
 Event sensitivity (seizures found), precision, F1 and false detections per day. eeg-prep output

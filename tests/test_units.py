@@ -131,3 +131,25 @@ def test_scoring_szcore_rules():
     pooled = S.pooled([S.score([(1000.0, 60.0)], [(1000.0, 60.0)], 3600.0),
                        S.score([], [(10.0, 30.0)], 3600.0)], "event")
     assert (pooled["tp"], pooled["fp"], pooled["fp_per_day"]) == (1, 1, pytest.approx(12.0))
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("2016-01-01T19:39:33", datetime(2016, 1, 1, 19, 39, 33)),
+    ("2016-01-01T19:39:33+00:00", datetime(2016, 1, 1, 19, 39, 33)),
+    ("2016-01-01T19:39:33-05:00", datetime(2016, 1, 1, 19, 39, 33)),
+    ("2016-01-01 19:39:33", datetime(2016, 1, 1, 19, 39, 33)),
+    ("n/a", None), ("", None), ("yesterday", None)])
+def test_parse_wall_clock(value, expected):
+    assert E.parse_wall_clock(value) == expected
+
+
+def test_events_tsv_without_seizure_information_is_not_a_label_source(tmp_path):
+    d = tmp_path / "sub-01" / "eeg"
+    d.mkdir(parents=True)
+    (d / "sub-01_task-rest_eeg.edf").write_bytes(b"")
+    (d / "sub-01_task-rest_events.tsv").write_text("onset\tduration\ttrial_type\n10\t2\teyes_closed\n")
+    recs, _, _ = E.find_recordings(tmp_path)
+    assert not recs[0].labels_known
+    (d / "sub-01_task-rest_events.tsv").write_text("onset\tduration\teventType\n0\t600\tbckg\n")
+    recs, _, _ = E.find_recordings(tmp_path)
+    assert recs[0].labels_known and recs[0].seizures == []

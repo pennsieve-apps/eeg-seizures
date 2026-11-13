@@ -107,15 +107,20 @@ class Model:
         return np.clip(np.nan_to_num(y, nan=0.0), 0.0, 1.0)
 
 
-def find_model_folder(root: Path) -> Path | None:
-    """The folder of the first model.json under root (following symlinks), or None."""
+def find_model_folder(input_dir: Path) -> Path | None:
+    """The model folder: the first model.json inside INPUT_DIR/model/ (the `model` port), else a
+    model.json directly at the input root. A model.json deeper inside other inputs (e.g. eeg-prep's
+    derivative) is never taken as the model."""
     import os
 
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
-        dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
-        if "model.json" in filenames:
-            return Path(dirpath)
-    return None
+    port = input_dir / "model"
+    if port.is_dir():
+        for dirpath, dirnames, filenames in os.walk(port, followlinks=True):
+            dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+            if "model.json" in filenames:
+                return Path(dirpath)
+        return None
+    return input_dir if (input_dir / "model.json").is_file() else None
 
 
 def read_model(folder: Path) -> Model:

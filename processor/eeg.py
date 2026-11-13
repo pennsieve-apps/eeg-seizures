@@ -89,7 +89,8 @@ class Recording:
     source: str                        # "recordings.csv" or "scan"
     start_time: str = ""               # ISO 8601 wall clock from recordings.csv
     montage: str = ""                  # from recordings.csv
-    n_seizures: int | None = None      # from recordings.csv
+    n_seizures: int | None = None      # from recordings.csv (None: empty = never annotated)
+    labels_source: str | None = None   # recordings.csv `labels_source` (None: no such column; "" = never annotated)
     channels_tsv: Path | None = None
     events_tsv: Path | None = None
     sidecar_json: Path | None = None
@@ -165,8 +166,13 @@ def _events_from_tsv(rec: Recording) -> None:
     except (OSError, UnicodeDecodeError, csv.Error) as exc:
         rec.notes.append(f"events.tsv unreadable: {exc}")
         return
-    rec.labels_known = True
-    rec.label_sources.append(rec.events_tsv.name)
+    # An events.tsv is a label source only when it says something about seizures: a seizure row,
+    # or SzCORE's HED-SCORE layout (eventType column, `bckg` = annotated, no seizure). A BIDS
+    # events.tsv of other events (or eeg-prep's bad segments) does not make "0 seizures" true.
+    if any("eventType" in e for e in rows[:1]) or any(
+            (e.get("trial_type") or "").strip().lower() in SEIZURE_TYPES for e in rows):
+        rec.labels_known = True
+        rec.label_sources.append(rec.events_tsv.name)
     for e in rows:
         kind = (e.get("trial_type") or "").strip().lower()
         etype = (e.get("eventType") or "").strip().lower()
@@ -212,7 +218,8 @@ def find_recordings(input_dir: Path, skip: set[str] | None = None
             recs.append(Recording(
                 recording_id=rid, subject=row.get("subject") or rid.split("_")[0].removeprefix("sub-"),
                 path=sig, rel=rel(sig), source="recordings.csv", start_time=row.get("start_time", ""),
-                montage=row.get("montage", ""), n_seizures=int(nsz) if nsz is not None else None))
+                montage=row.get("montage", ""), n_seizures=int(nsz) if nsz is not None else None,
+                labels_source=row.get("labels_source") if "labels_source" in row else None))
 
     for p in files:
         if p.suffix.lower() not in SIGNAL_EXTENSIONS or os.path.realpath(p) in listed:
@@ -260,7 +267,17 @@ def find_recordings(input_dir: Path, skip: set[str] | None = None
                 r.label_sources.append("labels.csv")
             if not any(abs(on - s) < 1.0 for s, _ in r.seizures):
                 r.seizures.append((on, dur if dur and dur > 0 else None))
-        if r.n_seizures is not None and not r.labels_known:
+        if r.labels_source is not None:
+            # conventions.md: score only recordings with a labels_source (empty = never annotated)
+            src = r.labels_source.strip()
+            r.labels_known = bool(src)
+            r.label_sources = [f"recordings.csv labels_source={src}"] if src else []
+            if not src and r.seizures:
+                r.notes.append("seizure rows found but recordings.csv labels_source is empty; not scored")
+            if src and r.n_seizures and not r.seizures:
+                r.notes.append(f"recordings.csv says {r.n_seizures} seizure(s) but none has a time; not scored")
+                r.labels_known = False
+        elif r.n_seizures is not None and not r.labels_known:
             r.labels_known = True
             r.label_sources.append("recordings.csv n_seizures")
             if r.n_seizures > 0:
@@ -411,20 +428,28 @@ def channel_table(rec: Recording) -> tuple[set[str], dict[str, str]]:
 
 # --- wall clock --------------------------------------------------------------------------
 
+def parse_wall_clock(value: str) -> datetime | None:
+    """ISO 8601 or SzCORE (`%Y-%m-%d %H:%M:%S`) time as naive wall clock. A UTC offset, when
+    present (older eeg-prep outputs wrote `+00:00` on local EDF times), is dropped, not applied:
+    the digits are the recording's wall clock either way."""
+    v = value.strip()
+    if not v or v.lower() == "n/a":
+        return None
+    try:
+        return datetime.fromisoformat(v.replace(" ", "T", 1)).replace(tzinfo=None, microsecond=0)
+    except ValueError:
+        return None
+
+
 def start_datetime(rec: Recording, raw) -> datetime | None:
     """The recording's wall-clock start: recordings.csv `start_time`, else the SzCORE
     `dateTime` of its events.tsv, else the file header (MNE `meas_date`)."""
     for value in (rec.start_time, rec.event_datetime):
         if value:
-            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"):
-                try:
-                    return datetime.strptime(value.replace("Z", "").split("+")[0], fmt)
-                except ValueError:
-                    continue
-            try:
-                return datetime.fromisoformat(value).replace(tzinfo=None)
-            except ValueError:
-                rec.notes.append(f"start time {value!r} not understood")
+            dt = parse_wall_clock(value)
+            if dt is not None:
+                return dt
+            rec.notes.append(f"start time {value!r} not understood")
     md = raw.info.get("meas_date")
     if md is not None:
         if md.tzinfo is not None:

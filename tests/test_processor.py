@@ -130,6 +130,39 @@ def test_exclude_bad_segments_drops_the_covered_seizure(fixture, tmp_path):
     assert prov["parameters"]["EXCLUDE_BAD_SEGMENTS"] == "true"
 
 
+def test_unannotated_recordings_are_not_scored(fixture, tmp_path):
+    """conventions.md: score only recordings with a labels_source (empty = never annotated),
+    even though eeg-prep writes an events.tsv (bad segments) for every recording."""
+    import shutil
+
+    inp = tmp_path / "in"
+    shutil.copytree(fixture / "eeg", inp / "eeg", ignore=shutil.ignore_patterns("loose"))
+    csvp = inp / "eeg" / "recordings.csv"
+    text = csvp.read_text().splitlines()
+    head = text[0].split(",")
+    li, ni = head.index("labels_source"), head.index("n_seizures")
+    out = [text[0]]
+    for line in text[1:]:
+        f = line.split(",")
+        if f[0].startswith("sub-02"):
+            f[li] = f[ni] = ""
+            f[head.index("start_time")] = "2024-03-06T09:00:00+00:00"  # older eeg-prep: offset written
+        out.append(",".join(f))
+    csvp.write_text("\n".join(out) + "\n")
+    # a stray model.json inside the derivative must not be taken as the model
+    (inp / "eeg" / "sub-02" / "model.json").write_text("{}")
+    r = run(inp, tmp_path / "out")
+    assert r.returncode == 0, r.stderr
+    o = tmp_path / "out" / "eeg-seizures"
+    scored = {x["recording_id"] for x in rows(o / "scores.csv")} - {"pooled", "subject_mean"}
+    assert scored == {"sub-01_ses-01_task-szMonitoring_run-01"}
+    prov = json.loads((o / "provenance.json").read_text())
+    assert prov["recordings"]["sub-02_ses-01_task-szMonitoring_run-01"]["scores"] is None
+    assert not prov["warnings"]
+    tsv = (o / "szcore" / "sub-02_ses-01_task-szMonitoring_run-01.tsv").read_text().splitlines()[1].split("\t")
+    assert tsv[5] == "2024-03-06 09:00:00"
+
+
 def test_bad_parameter_exits_2(fixture, tmp_path):
     assert run(fixture, tmp_path, THRESHOLD="abc").returncode == 2
     assert run(fixture, tmp_path, DETECTOR="gotman").returncode == 2

@@ -121,7 +121,8 @@ def write_tsv(path: Path, header: list[str], rows: list[dict]) -> None:
 
 
 REC_COLS = ["recording_id", "subject", "session", "task", "run", "path", "sfreq", "n_channels", "n_good",
-            "duration_s", "montage", "reference", "kind", "start_time", "n_seizures", "source_format", "age", "sex"]
+            "duration_s", "montage", "reference", "kind", "start_time", "labels_source", "n_seizures", "source_format",
+            "age", "sex"]
 
 
 def derivative_recording(root: Path, sub: str, fs: float, data: np.ndarray, start: str, events: list[dict],
@@ -146,7 +147,8 @@ def derivative_recording(root: Path, sub: str, fs: float, data: np.ndarray, star
     return {"recording_id": stem, "subject": sub, "session": "01", "task": "szMonitoring", "run": "01",
             "path": f"sub-{sub}/ses-01/eeg/{stem}_desc-preproc_eeg.edf", "sfreq": f"{fs:g}", "n_channels": len(CH19),
             "n_good": len(CH19) - len(bad), "duration_s": f"{data.shape[1] / fs:g}", "montage": "average",
-            "reference": "average", "kind": "routine", "start_time": start, "n_seizures": n_sz,
+            "reference": "average", "kind": "routine", "start_time": start, "labels_source": "events.tsv",
+            "n_seizures": n_sz,
             "source_format": "bids-edf", "age": "", "sex": ""}
 
 

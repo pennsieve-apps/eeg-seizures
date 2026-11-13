@@ -406,9 +406,9 @@ def main() -> int:
 
     warnings: list[str] = []
     model = None
-    model_root = input_dir / "model" if (input_dir / "model").is_dir() else input_dir
-    model_folder = M.find_model_folder(model_root)
-    skip = {os.path.realpath(model_folder)} if model_folder is not None else set()
+    model_folder = M.find_model_folder(input_dir)
+    skip = ({os.path.realpath(model_folder)} if model_folder is not None
+            and os.path.realpath(model_folder) != os.path.realpath(input_dir) else set())
     if p["detector"] == "model":
         if model_folder is None:
             log.error("DETECTOR=model but no model.json was found in the input (link a model folder to the "
