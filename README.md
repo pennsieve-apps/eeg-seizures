@@ -271,8 +271,9 @@ second ends a candidate event, and pieces shorter than `MIN_DURATION_S` (20 s) a
 *before* nearby pieces are merged, so a seizure cut by several short bad segments (19–61 % of
 chb01 seizures, in 4–13 segments, longest clean stretch 6–17 s) disappears. eeg-prep's **muscle**
 criterion causes most of these cuts: it fires on the fast (beta/gamma) activity of seizures as
-well as on muscle artifact (every lost chb01 seizure, and sub-10 and sub-17 on Siena, are in
-recordings whose only bad segments are muscle). So `EXCLUDE_BAD_SEGMENTS=true` is safe only when
+well as on muscle artifact (every lost chb01 seizure, and sub-10 run-02 and sub-17 run-01 on
+Siena, are in recordings whose only bad segments are muscle; sub-10 runs 03 and 05 add a little
+`flat`). So `EXCLUDE_BAD_SEGMENTS=true` is safe only when
 the bad segments are known not to overlap seizures (as on eeg-prep's protected demo output);
 on unannotated recordings keep the default.
 
