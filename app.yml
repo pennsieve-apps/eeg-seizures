@@ -189,5 +189,11 @@ outputs:
 # See app-deploy-service docs/app-manifest-review.md.
 review:
   version: 1
-  generate:
-    command: python -m tests.make_fixture "$REVIEW_INPUT_DIR"
+  # The generator also writes truth.json (the planted seizures, for the tests) next to eeg/;
+  # taking only eeg/ as the port's contents keeps it out of the app's INPUT_DIR. `model` is
+  # optional and left empty, so the sample runs the line-length detector.
+  inputs:
+    eeg:
+      generate:
+        command: python -m tests.make_fixture "$REVIEW_INPUT_DIR"
+        root: eeg
