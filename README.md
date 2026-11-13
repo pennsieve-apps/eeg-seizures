@@ -192,9 +192,9 @@ arrays (≈ 20 MB for 24 h). Measured in Docker, **linux/amd64 emulated on an M-
 | Run | Data | `--cpus` / `--memory` | Wall time | Peak memory (cgroup `memory.peak`, incl. page cache) | Peak RSS |
 |---|---|---|---|---|---|
 | Siena, all 41 recordings, source data | 141.0 h, 19 ch, 256 Hz, 4.7 GB EDF | 2 / 3g | 93 s in the app | 0.87 GB | 360 MB |
-| Siena, all 41 recordings, eeg-prep output | 141.0 h | 2 / 3g | 95 s in the app | 0.99 GB | 360 MB |
+| Siena, all 41 recordings, eeg-prep output (final) | 141.0 h | 2 / 2g | 86 s in the app | 0.80 GB | 360 MB |
 | CHB-MIT chb01, 42 files, source data | 40.6 h, 23 bipolar ch, 256 Hz | 2 / 3g | 25 s in the app | 0.62 GB | 349 MB |
-| CHB-MIT chb01, 42 files, eeg-prep output | 40.6 h, 21 pairs | 2 / 3g | 38 s in the app | 0.60 GB | 348 MB |
+| CHB-MIT chb01, 42 files, eeg-prep output (final) | 40.6 h, 21 pairs | 2 / 2g | 29 s in the app | 0.55 GB | 350 MB |
 | Siena sub-01 run-00, one long recording | 13.5 h | 1 / 3g | 15 s (11.5 s for the recording: read 1.2 s, compute 6.7 s) | 0.76 GB | 330 MB |
 | Synthetic fixture, Lambda-style (`--read-only --user 65534:65534 --tmpfs /tmp`) | 3 recordings, 35 min | 2 / 3g | 6 s | — | 394 MB |
 
@@ -224,31 +224,35 @@ low-pass (20/25/30 Hz), `TOP_K`, `MIN_DURATION_S` (10/15/20 s; 30 s was not allo
 (`scripts/sweep_threshold.py`). The other 7 Siena subjects and CHB-MIT chb01 were not looked at
 while tuning; nothing was re-tuned on eeg-prep's output.
 
-Event sensitivity (seizures found), precision, F1 and false detections per day:
+Event sensitivity (seizures found), precision, F1 and false detections per day. eeg-prep output
+is its final version (bad time 4.6 % of Siena and 2.7 % of chb01; no annotated seizure overlaps
+a bad segment):
 
-| Set | Seizures | Hours | Source data: sens. / prec. / **F1** / **FP/day** | eeg-prep output: sens. / prec. / **F1** / **FP/day** |
-|---|---|---|---|---|
-| Siena, tuning half (7 subjects) | 21 | 62.3 | 0.62 (13) / 0.23 / 0.33 / 16.9 | 0.67 (14) / 0.21 / 0.32 / 20.0 |
-| **Siena, held-out half (7 subjects)** | 26 | 78.7 | **0.38 (10) / 0.21 / 0.27 / 11.6** | **0.50 (13) / 0.27 / 0.35 / 10.7** |
-| Siena, all 14 subjects (pooled) | 47 | 141.0 | 0.49 (23) / 0.22 / 0.30 / 14.0 | 0.57 (27) / 0.24 / 0.34 / 14.8 |
-| Siena, all 14 (subject mean, SzCORE's default) | 47 | 141.0 | 0.54 / 0.40 / 0.33 / 16.1 | 0.63 / 0.42 / 0.40 / 16.8 |
-| **CHB-MIT chb01 (held out, bipolar-only, paediatric)** | 7 | 40.6 | **0.86 (6) / 0.75 / 0.80 / 1.2** | **0.71 (5) / 0.71 / 0.71 / 1.2** |
+| Set | Seizures | Hours | Source data (default) | eeg-prep output, default (`EXCLUDE_BAD_SEGMENTS=false`) | eeg-prep output, `EXCLUDE_BAD_SEGMENTS=true` |
+|---|---|---|---|---|---|
+| Siena, tuning half (7 subjects) | 21 | 62.3 | 0.62 (13) / 0.23 / 0.33 / 16.9 | 0.67 (14) / 0.21 / 0.32 / 20.0 | 0.67 (14) / 0.78 / 0.72 / 1.5 |
+| **Siena, held-out half (7 subjects)** | 26 | 78.7 | **0.38 (10) / 0.21 / 0.27 / 11.6** | **0.50 (13) / 0.27 / 0.35 / 10.7** | **0.50 (13) / 0.93 / 0.65 / 0.3** |
+| Siena, all 14 subjects (pooled) | 47 | 141.0 | 0.49 (23) / 0.22 / 0.30 / 14.0 | 0.57 (27) / 0.24 / 0.34 / 14.8 | 0.57 (27) / 0.84 / 0.68 / 0.9 |
+| Siena, all 14 (subject mean, SzCORE's default) | 47 | 141.0 | 0.54 / 0.40 / 0.33 / 16.1 | 0.63 / 0.42 / 0.40 / 16.8 | 0.64 / 0.92 / 0.65 / 0.4 |
+| **CHB-MIT chb01 (held out, bipolar-only, paediatric)** | 7 | 40.6 | **0.86 (6) / 0.75 / 0.80 / 1.2** | **0.71 (5) / 0.71 / 0.71 / 1.2** | **0.71 (5) / 1.00 / 0.83 / 0.0** |
 
-Sample-based (1 s) F1, source / eeg-prep: Siena 0.29 / 0.32 pooled, chb01 0.57 / 0.51. The
-Siena held-out subject mean on eeg-prep's output is sensitivity 0.59, precision 0.44, F1 0.39,
-14.1 false detections/day. Both Siena runs were re-derived independently from the
-`szcore/*.tsv` files with epilepsy2bids' `Annotations.loadTsv` and timescoring against the
-dataset's own HED-SCORE files: identical (source 23 TP / 82 FP, eeg-prep 27 TP / 87 FP, 47
-reference). chb01's seizures are large and well known to be easy; Siena (adults with focal
-epilepsy; 33 of its 47 seizures are focal with impaired awareness) is the harder and more
-representative test.
+Each cell: sensitivity (seizures found) / precision / F1 / false detections per day.
+Sample-based (1 s) F1, source / eeg-prep default / eeg-prep excluding bad segments: Siena 0.29 /
+0.32 / 0.64 pooled, chb01 0.57 / 0.51 / 0.61. The Siena and eeg-prep default runs were re-derived
+independently from the `szcore/*.tsv` files with epilepsy2bids' `Annotations.loadTsv` and
+timescoring against the dataset's own HED-SCORE files: identical (source 23 TP / 82 FP, eeg-prep
+27 TP / 87 FP, 47 reference). chb01's seizures are large and well known to be easy; Siena (adults
+with focal epilepsy; 33 of its 47 seizures are focal with impaired awareness) is the harder and
+more representative test.
 
-**Why eeg-prep's bad segments are not left out by default.** With `EXCLUDE_BAD_SEGMENTS=true` on
-the same eeg-prep output, false detections nearly vanish but so do the seizures: Siena all 14
-subjects 0.34 (16 of 47) / 0.89 / 0.49 / 0.34 per day (held-out half 0.27 / 0.88 / 0.41 / 0.31),
-and chb01 **0 of 7** seizures, because eeg-prep's amplitude criterion (`AMPLITUDE_UV` 500 µV)
-marks every chb01 seizure as a bad segment. The option is there for review settings where a few
-false alarms matter more than missed seizures; it is not a fix for artifacts.
+**eeg-prep's bad segments.** Most false detections of the line-length detector fall in what
+eeg-prep marks as bad (high-amplitude artifact): leaving those segments out removes almost all of
+them (Siena 14.8 → 0.9 per day) without losing a seizure on this data. It is still **off by
+default**, because eeg-prep marks a segment bad by amplitude (`AMPLITUDE_UV`), and high-amplitude
+ictal activity can cross that: with eeg-prep's earlier, stricter bad-segment rules, every chb01
+seizure was inside a bad segment and `EXCLUDE_BAD_SEGMENTS=true` found 0 of 7. Turn it on when
+the bad segments are known not to cover seizures (check eeg-prep's QC), or when a short list
+matters more than completeness.
 
 For context, the SzCORE benchmark's published Siena event scores
 (`results/*/siena.json` in [esl-epfl/szcore](https://github.com/esl-epfl/szcore), read
@@ -262,8 +266,8 @@ state-of-the-art detector; plug in a model for more.
 
 - **Review candidates only.** On held-out adult focal epilepsy (Siena) the default finds about
   4–5 in 10 annotated seizures (source data; half on eeg-prep's output) at about 11–12 false
-  detections per day; performance differs a lot
-  between patients (0–100 % per subject). Do not use it to count seizures or to decide treatment.
+  detections per day (about 0.3 per day on eeg-prep's output with `EXCLUDE_BAD_SEGMENTS=true`);
+  performance differs a lot between patients (0–100 % per subject). Do not use it to count seizures or to decide treatment.
 - Line length rises with any large, fast, sustained signal: chewing, movement, electrode
   artifact and high-amplitude sleep activity cause false detections; low-amplitude or
   non-rhythmic seizures (many focal-aware seizures) are missed. Annotated `artifact` intervals are
@@ -305,8 +309,8 @@ Please cite these works if you use this app. Verified on Crossref/DataCite and P
 author lists in CITATION.cff.
 
 - Dan J, Pale U, Amirshahi A, Cappelletti W, Ingolfsson TM, Wang X, Cossettini A, Bernini A,
-  Benini L, Beniczky S, Atienza D, Ryvlin P. SzCORE: Seizure Community Open‐Source Research
-  Evaluation framework for the validation of electroencephalography‐based automated seizure
+  Benini L, Beniczky S, Atienza D, Ryvlin P. SzCORE : Seizure Community Open‐Source Research
+  Evaluation framework for the validation of electroencephalography ‐based automated seizure
   detection algorithms. *Epilepsia* 2025;66(S3):14–24 (online 2024). doi:10.1111/epi.18113,
   PMID 39292446.
 - Esteller R, Echauz J, Tcheng T, Litt B, Pless B. Line length: an efficient feature for seizure

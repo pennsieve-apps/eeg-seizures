@@ -27,8 +27,7 @@ keywords:
 - line-length
 references:
 - type: article
-  title: 'SzCORE: Seizure Community Open‐Source Research Evaluation framework for the validation of electroencephalography‐based
-    automated seizure detection algorithms'
+  title: 'SzCORE : Seizure Community Open‐Source Research Evaluation framework for the validation of electroencephalography ‐based automated seizure detection algorithms'
   authors:
   - family-names: Dan
     given-names: Jonathan
